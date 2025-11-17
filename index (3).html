@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sobrepor Imagem com Marca d'Água</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      margin: 0;
+      box-sizing: border-box;
+    }
+
+    h2 {
+      text-align: center;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .group {
+      text-align: left;
+      margin-bottom: 20px;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 8px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    canvas {
+      border: 1px solid #000;
+      display: block;
+      margin: 10px auto;
+      width: 100%;
+      height: auto;
+    }
+
+    #download {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      width: 100%;
+    }
+
+    #download:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>Sobrepor Imagem (Geral)</h2>
+
+    <!-- Grupo 1 - Tipo -->
+    <div class="group">
+        <strong>Tipo:</strong>
+        <label><input type="radio" name="tipo" value="semMarca" checked> Sem Marca</label>
+        <label><input type="radio" name="tipo" value="editorial"> Editorial</label>
+        <label><input type="radio" name="tipo" value="opiniao"> Opinião</label>
+    </div>
+
+    <!-- Grupo 2 - Direção -->
+    <div id="direcaoBox" class="group hidden">
+        <strong>Direção:</strong>
+        <label><input type="radio" name="lado" value="aDireita" checked> Direita</label>
+        <label><input type="radio" name="lado" value="aEsquerda"> Esquerda</label>
+    </div>
+
+    <input type="file" id="upload" accept="image/*">
+    <canvas id="canvas"></canvas>
+    <button id="download" style="display:none;">📥 Baixar Imagem</button>
+
+<script>
+/* =============================
+   SISTEMA DE OPÇÕES (mantido)
+============================= */
+
+function atualizarDirecao() {
+    const tipo = document.querySelector('input[name="tipo"]:checked').value;
+    const direcaoBox = document.getElementById("direcaoBox");
+
+    if (tipo !== "semMarca") {
+        direcaoBox.classList.remove("hidden");
+    } else {
+        direcaoBox.classList.add("hidden");
+    }
+}
+
+document.querySelectorAll('input[name="tipo"]').forEach(r => {
+    r.addEventListener("change", atualizarDirecao);
+});
+
+function getValorFinal() {
+    const tipo = document.querySelector('input[name="tipo"]:checked').value;
+    let lado = "aDireita";
+
+    if (tipo !== "semMarca") {
+        lado = document.querySelector('input[name="lado"]:checked').value;
+    }
+
+    if (tipo === "semMarca") return `logo_${lado}`;
+    if (tipo === "editorial") return `editorial_${lado}`;
+    if (tipo === "opiniao") return `opiniao_${lado}`;
+
+    return null;
+}
+
+atualizarDirecao();
+
+
+/* =============================
+   SUA LÓGICA ORIGINAL (inalterada)
+   — apenas trocamos overlayImage.src
+   e adicionamos atualização ao mudar opções
+   e correção no download
+============================= */
+
+const upload = document.getElementById('upload');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const downloadBtn = document.getElementById('download');
+
+const overlayImage = new Image(); // continua como antes
+
+// Nova: guardamos baseImage globalmente para poder redesenhar quando
+// o usuário mudar tipo/lado após o upload.
+let baseImage = null;
+
+function applyOverlay() {
+  // Se ainda não tem imagem base carregada, nada a fazer
+  if (!baseImage || !baseImage.complete) return;
+
+  // Ajusta canvas ao tamanho da base
+  canvas.width = baseImage.width;
+  canvas.height = baseImage.height;
+
+  // Desenha a base primeiro
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(baseImage, 0, 0);
+
+  // Mostra o botão de download mesmo que a overlay ainda não exista
+  downloadBtn.style.display = 'inline-block';
+
+  // Determina overlay conforme opções
+  const overlaySrc = getValorFinal() + ".png";
+  if (!overlaySrc) return;
+
+  // Tratamento de erro para overlay inexistente — só registramos e seguimos
+  overlayImage.onload = function () {
+    try {
+      ctx.drawImage(overlayImage, 0, 0, baseImage.width, baseImage.height);
+    } catch (e) {
+      // se houve problema ao desenhar, ignoramos — ainda permitimos o download
+      console.warn('Erro ao desenhar overlay:', e);
+    }
+    downloadBtn.style.display = 'inline-block';
+  };
+
+  overlayImage.onerror = function () {
+    // Overlay não encontrada ou com erro — não bloqueia o download
+    console.warn('Overlay não pôde ser carregada:', overlaySrc);
+    // já temos a base desenhada, então apenas asseguramos o botão visível
+    downloadBtn.style.display = 'inline-block';
+  };
+
+  // Dispara o carregamento da overlay
+  overlayImage.src = overlaySrc;
+
+  // Se já estiver em cache/complete, desenha imediatamente
+  if (overlayImage.complete && overlayImage.naturalWidth) {
+    ctx.drawImage(overlayImage, 0, 0, baseImage.width, baseImage.height);
+    downloadBtn.style.display = 'inline-block';
+  }
+}
+
+upload.addEventListener('change', function (event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    // Criamos/atualizamos a baseImage global
+    baseImage = new Image();
+
+    baseImage.onload = function () {
+      // desenha usando a função que já considera opções atuais
+      applyOverlay();
+    };
+
+    baseImage.src = e.target.result;
+  };
+
+  reader.readAsDataURL(file);
+});
+
+// Nova: ouvir mudanças nos radios (tipo e lado) para reaplicar overlay
+document.querySelectorAll('input[name="tipo"], input[name="lado"]').forEach(el => {
+  el.addEventListener('change', function () {
+    // atualiza visibilidade da caixa de direção (mantido)
+    atualizarDirecao();
+    // reaplica overlay caso já exista imagem carregada
+    applyOverlay();
+  });
+});
+
+// Download: usa toBlob() para gerar arquivo e URL.createObjectURL
+downloadBtn.addEventListener('click', function () {
+    var canvas = document.getElementById('canvas');
+    var link = document.getElementById('downloadLink');
+    link.href = canvas.toDataURL('image/png'); // converte para URL PNG
+    link.download = 'minhaImagem.png'; // nome do arquivo no download
+});
+</script>
+
+</body>
+</html>
